@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Tải Truyện</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin>(function(){const n=document.createElement("link").relList;if(n&&n.supports&&n.supports("modulepreload"))return;for(const t of document.querySelectorAll('link[rel="modulepreload"]'))o(t);new MutationObserver(t=>{for(const c of t)if(c.type==="childList")for(const r of c.addedNodes)r.tagName==="LINK"&&r.rel==="modulepreload"&&o(r)}).observe(document,{childList:!0,subtree:!0});function i(t){const c={};return t.integrity&&(c.integrity=t.integrity),t.referrerPolicy&&(c.referrerPolicy=t.referrerPolicy),t.crossOrigin==="use-credentials"?c.credentials="include":t.crossOrigin==="anonymous"?c.credentials="omit":c.credentials="same-origin",c}function o(t){if(t.ep)return;t.ep=!0;const c=i(t);fetch(t.href,c)}})();/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */const E="webCrawlerConfig";let $=!1,s=[],h=0;const u=document.getElementById("website-name"),g=document.getElementById("start-url"),f=document.getElementById("content-selector"),v=document.getElementById("next-url-selector"),x=document.getElementById("output-format"),I=document.getElementById("start-btn"),B=document.getElementById("stop-btn"),N=document.getElementById("clear-btn"),P=document.getElementById("download-btn"),b=document.getElementById("progress-log"),S=document.getElementById("download-container"),z=document.getElementById("download-single"),L=document.getElementById("download-zip"),C=[u,g,f,v];function H(){const e={websiteName:u.value,startUrl:g.value,contentSelector:f.value,nextUrlSelector:v.value};localStorage.setItem(E,JSON.stringify(e))}function R(){const e=localStorage.getItem(E);if(e)try{const n=JSON.parse(e);u.value=n.websiteName,g.value=n.startUrl,f.value=n.contentSelector,v.value=n.nextUrlSelector,a("Đã tải cấu hình đã lưu lần trước.","info")}catch(n){console.error("Lỗi khi tải cấu hình:",n),localStorage.removeItem(E)}else u.value="vivutruyen",f.value=".reading",v.value="#next_chap",a("Đã tải cấu hình mặc định cho vivutruyen.com. Hãy nhập URL bắt đầu.","info")}function w(e){$=e,I.disabled=e,B.disabled=!e,[...C,x].forEach(n=>n.disabled=e),!e&&s.length>0?S.classList.remove("hidden"):S.classList.add("hidden")}function a(e,n="info"){const i=document.createElement("p");i.textContent=e,i.className=n,b.appendChild(i),b.scrollTop=b.scrollHeight}function _(){if(!u.value.trim()||!g.value.trim()||!f.value.trim()||!v.value.trim())return a("Lỗi: Vui lòng điền đầy đủ tất cả các trường cấu hình và URL bắt đầu.","error"),!1;try{new URL(g.value)}catch{return a("Lỗi: URL bắt đầu không hợp lệ.","error"),!1}return!0}async function M(){let e=g.value;const n="https://api.allorigins.win/get?url=",i=new DOMParser;let o=!1;for(;$&&e;){h++,a(`Đang tải chương ${h}: ${e}`);try{const t=await fetch(n+encodeURIComponent(e));if(!t.ok)throw new Error(`Lỗi Proxy! Trạng thái: ${t.status}`);const r=(await t.json()).contents;if(!r)throw new Error("Proxy không trả về nội dung.");const p=i.parseFromString(r,"text/html"),y=p.querySelector(f.value);if(!y)throw new Error(`Không tìm thấy thẻ chứa nội dung "${f.value}".`);s.push({title:`Chương ${h}`,contentHtml:y.innerHTML}),a(`Đã tải thành công chương ${h}.`,"success");const m=p.querySelector(v.value),l=m==null?void 0:m.getAttribute("href");l&&l.trim()!==""&&l!=="#"&&!l.startsWith("javascript:")?e=new URL(l,e).href:(o=!0,e=null)}catch(t){a(`Lỗi ở chương ${h}: ${t instanceof Error?t.message:String(t)}`,"error"),$=!1}}a(o?"Không tìm thấy chương tiếp theo. Có vẻ như đã hết truyện!":$?"Tải truyện hoàn tất!":"Đã dừng tải.","success"),w(!1)}function j(){_()&&(s=[],h=0,b.innerHTML="",a("Bắt đầu tải truyện...","info"),w(!0),M())}function F(){w(!1)}function A(){u.value="",g.value="",f.value="",v.value="",b.innerHTML="",s=[],h=0,localStorage.removeItem(E),w(!1),a("Đã xóa tất cả các trường và tiến trình. Cấu hình đã lưu cũng được xóa.")}async function D(){if(s.length===0){a("Không có nội dung để tải xuống.","error");return}L.checked?await K():await J()}async function J(){const e=u.value.trim().replace(/[^a-z0-9]/gi,"_")||"truyen",n=x.value,i=`${e}.${n}`;let o;a(`Đang chuẩn bị file ${n} gộp...`,"info");try{switch(n){case"txt":const t=s.map(r=>`${r.title}
+
+${U(r.contentHtml)}
+
+
+`).join("");o=new Blob([t],{type:"text/plain;charset=utf-8"});break;case"doc":const c=s.map(r=>`<h1>${r.title}</h1>${r.contentHtml}`).join('<p style="page-break-before: always;"></p>');o=await htmlDocx.asBlob(c);break;case"epub":o=await q();break}o&&(O(o,i),a(`Đã tạo file ${i} thành công. Bắt đầu tải xuống.`,"success"))}catch(t){a(`Lỗi khi tạo file: ${t instanceof Error?t.message:String(t)}`,"error")}}async function K(){const e=new JSZip,n=x.value,i=u.value.trim().replace(/[^a-z0-9]/gi,"_")||"truyen";a(`Đang nén các chương vào file ${i}.zip...`,"info");try{if(n==="doc"){const t=s.map(async(r,p)=>{const y=`<h1>${r.title}</h1>${r.contentHtml}`,m=await htmlDocx.asBlob(y);return{name:`${i}_${r.title.replace(/[^a-z0-9]/gi,"_")}.${n}`,data:m}});(await Promise.all(t)).forEach(r=>e.file(r.name,r.data))}else s.forEach((t,c)=>{const r=`${i}_${t.title.replace(/[^a-z0-9]/gi,"_")}.${n}`,p=`${t.title}
+
+${U(t.contentHtml)}`;e.file(r,p)});const o=await e.generateAsync({type:"blob"});O(o,`${i}.zip`),a(`Đã tạo file ${i}.zip thành công.`,"success")}catch(o){a(`Lỗi khi tạo file zip: ${o instanceof Error?o.message:String(o)}`,"error")}}function U(e){const n=document.createElement("div");return n.innerHTML=e,n.textContent||n.innerText||""}function O(e,n){const i=URL.createObjectURL(e),o=document.createElement("a");o.href=i,o.download=n,document.body.appendChild(o),o.click(),document.body.removeChild(o),URL.revokeObjectURL(i)}async function q(){var m;const e=new JSZip,n=u.value.trim()||"Truyện";e.file("mimetype","application/epub+zip",{compression:"STORE"}),(m=e.folder("META-INF"))==null||m.file("container.xml",`<?xml version="1.0"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);const o=e.folder("OEBPS");s.forEach((l,d)=>{const T=`<?xml version='1.0' encoding='utf-8'?>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${l.title}</title></head>
+<body>
+  <h2>${l.title}</h2>
+  ${l.contentHtml}
+</body></html>`;o==null||o.file(`chapter-${d+1}.xhtml`,T)});const t=s.map((l,d)=>`<item id="chapter-${d+1}" href="chapter-${d+1}.xhtml" media-type="application/xhtml+xml"/>`).join(`
+`),c=s.map((l,d)=>`<itemref idref="chapter-${d+1}"/>`).join(`
+`),r=`<?xml version='1.0' encoding='utf-8'?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:title>${n}</dc:title>
+    <dc:creator>Web Crawler</dc:creator>
+    <dc:identifier id="bookid">urn:uuid:${crypto.randomUUID()}</dc:identifier>
+    <dc:language>vi</dc:language>
+  </metadata>
+  <manifest>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    ${t}
+  </manifest>
+  <spine toc="ncx">
+    ${c}
+  </spine>
+</package>`;o==null||o.file("content.opf",r);const p=s.map((l,d)=>`<navPoint id="navpoint-${d+1}" playOrder="${d+1}">
+      <navLabel><text>${l.title}</text></navLabel>
+      <content src="chapter-${d+1}.xhtml"/>
+    </navPoint>`).join(`
+`),y=`<?xml version='1.0' encoding='utf-8'?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="urn:uuid:${crypto.randomUUID()}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>${n}</text></docTitle>
+  <navMap>
+    ${p}
+  </navMap>
+</ncx>`;return o==null||o.file("toc.ncx",y),e.generateAsync({type:"blob",mimeType:"application/epub+zip"})}function k(){x.value==="epub"?(L.disabled=!0,z.checked=!0):L.disabled=!1}I.addEventListener("click",j);B.addEventListener("click",F);N.addEventListener("click",A);P.addEventListener("click",D);C.forEach(e=>e.addEventListener("input",H));x.addEventListener("change",k);R();w(!1);k();</script>
+  <style rel="stylesheet" crossorigin>:root{--primary-color: #4a90e2;--primary-hover-color: #5aa1f2;--danger-color: #e94f37;--danger-hover-color: #f06a55;--success-color: #50e3c2;--success-hover-color: #62f5d5;--secondary-color: #6c757d;--secondary-hover-color: #868e96;--background-color: #2c3e50;--surface-color: #34495e;--text-color: #ecf0f1;--text-muted-color: #bdc3c7;--border-color: #4a617a;--font-family: "Inter", sans-serif;--border-radius: 8px;--card-shadow: 0 4px 12px rgba(0, 0, 0, .2);--transition-speed: .2s ease-in-out}*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}body{font-family:var(--font-family);background-color:var(--background-color);color:var(--text-color);line-height:1.6;padding:2rem}#app-container{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:2rem}header{text-align:center}header h1{font-size:2.5rem;font-weight:700;color:var(--text-color)}main{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start}.card{background-color:var(--surface-color);border-radius:var(--border-radius);padding:1.5rem 2rem;border:1px solid var(--border-color);box-shadow:var(--card-shadow);transition:transform var(--transition-speed)}.card h2{margin-bottom:1.5rem;font-weight:600;border-bottom:1px solid var(--border-color);padding-bottom:.75rem}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.5rem}.form-group{display:flex;flex-direction:column}.form-group label{margin-bottom:.5rem;font-weight:500;color:var(--text-muted-color)}.form-group input,.form-group select{width:100%;padding:.75rem;background-color:var(--background-color);border:1px solid var(--border-color);border-radius:var(--border-radius);color:var(--text-color);font-size:1rem;transition:border-color var(--transition-speed),box-shadow var(--transition-speed)}.form-group input::placeholder{color:var(--text-muted-color);opacity:.7}.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--primary-color);box-shadow:0 0 0 3px #4a90e24d}.form-group small{font-size:.8rem;color:var(--text-muted-color);margin-top:.25rem}.controls-grid{display:grid;grid-template-columns:1fr auto auto;gap:1.5rem;align-items:flex-end}.controls-grid .url-group{grid-column:1 / -1}.button-group{display:flex;gap:.75rem;flex-wrap:wrap}.btn{padding:.75rem 1.5rem;border:none;border-radius:var(--border-radius);font-size:1rem;font-weight:600;cursor:pointer;transition:background-color var(--transition-speed),transform var(--transition-speed)}.btn:hover:not(:disabled){transform:translateY(-2px)}.btn:active:not(:disabled){transform:translateY(0)}.btn:disabled{cursor:not-allowed;opacity:.5}.btn-primary{background-color:var(--primary-color);color:#fff}.btn-primary:hover:not(:disabled){background-color:var(--primary-hover-color)}.btn-danger{background-color:var(--danger-color);color:#fff}.btn-danger:hover:not(:disabled){background-color:var(--danger-hover-color)}.btn-secondary{background-color:var(--secondary-color);color:#fff}.btn-secondary:hover:not(:disabled){background-color:var(--secondary-hover-color)}.btn-success{background-color:var(--success-color);color:#1a252f}.btn-success:hover:not(:disabled){background-color:var(--success-hover-color)}#progress-log{width:100%;height:300px;background-color:var(--background-color);border:1px solid var(--border-color);border-radius:var(--border-radius);padding:1rem;overflow-y:auto;font-family:Courier New,Courier,monospace;font-size:.9rem;color:var(--text-muted-color);margin-bottom:1rem}#progress-log p{margin-bottom:.5em;word-break:break-all}#progress-log p.error{color:var(--danger-color)}#progress-log p.success{color:var(--success-color)}#download-container{margin-top:1rem;text-align:center}#download-container.hidden{display:none}.download-options{display:flex;justify-content:center;gap:1.5rem;margin-bottom:1rem}.form-group-radio{display:flex;align-items:center;gap:.5rem}.form-group-radio label{cursor:pointer;color:var(--text-muted-color)}.form-group-radio input{cursor:pointer}@media (max-width: 900px){main{grid-template-columns:1fr}}@media (max-width: 768px){.controls-grid{grid-template-columns:1fr}.controls-grid .url-group{grid-column:auto}.button-group{justify-content:center}}@media (max-width: 600px){body{padding:1rem}header h1{font-size:2rem}.card{padding:1.5rem}#progress-log{height:200px}}</style>
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <h1>Trình tải truyện vivutruyen</h1>
+        </header>
+
+        <main>
+            <div class="card" id="config-card" hidden>
+                <h2>1. Cấu Hình</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="website-name">Tên Trang Web</label>
+                        <input type="text" id="website-name" placeholder="ví dụ: TruyenFull">
+                    </div>
+                    <div class="form-group">
+                        <label for="content-selector">Thẻ Chứa Nội Dung</label>
+                        <input type="text" id="content-selector" placeholder="ví dụ: #content, .chapter-c">
+                    </div>
+                    <div class="form-group">
+                        <label for="next-url-selector">Thẻ Chứa Link Chương Tiếp Theo</label>
+                        <input type="text" id="next-url-selector" placeholder="ví dụ: #next-chap, .btn-next">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="controls-card">
+                <h2>1. Điều Khiển & Xuất File</h2>
+                <div class="controls-grid">
+                    <div class="form-group url-group">
+                        <label for="start-url">URL Chương Bắt Đầu</label>
+                        <input type="url" id="start-url" placeholder="https://website.com/truyen/chuong-1">
+                         <small>Ứng dụng tự động sử dụng proxy để tránh lỗi CORS.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="output-format">Định Dạng Xuất</label>
+                        <select id="output-format">
+                            <option value="txt">Văn bản (.txt)</option>
+                            <option value="epub">E-book (.epub)</option>
+                            <option value="doc">Word (.doc)</option>
+                        </select>
+                    </div>
+                    <div class="button-group">
+                        <button id="start-btn" class="btn btn-primary">Bắt Đầu</button>
+                        <button id="stop-btn" class="btn btn-danger" disabled>Dừng</button>
+                        <button id="clear-btn" class="btn btn-secondary">Xóa</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" id="progress-card">
+                <h2>2. Tiến Trình</h2>
+                <div id="progress-log" role="log" aria-live="polite"></div>
+                <div id="download-container" class="hidden">
+                    <div class="download-options">
+                        <div class="form-group-radio">
+                             <input type="radio" id="download-single" name="download-type" value="single" checked>
+                             <label for="download-single">Gộp thành 1 file</label>
+                        </div>
+                        <div class="form-group-radio">
+                             <input type="radio" id="download-zip" name="download-type" value="zip">
+                             <label for="download-zip">Tách từng chương (.zip)</label>
+                        </div>
+                    </div>
+                    <button id="download-btn" class="btn btn-success">Tải Xuống</button>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/html-to-docx@1.8.0/dist/html-to-docx.js"></script>
+</body>
+</html>
