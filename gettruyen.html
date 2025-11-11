@@ -1,0 +1,680 @@
+ 
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+ <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+ <style>
+     body {
+         display: flex;
+         font-family: sans-serif;
+         width: 100%;
+     }
+
+     .form-container,
+     .result-container {
+         width: 50%;
+         padding: 20px;
+         box-sizing: border-box;
+     }
+
+     .form-group {
+         margin-bottom: 12px;
+     }
+
+     .container {
+         display: flex;
+         width: 1350px;
+     }
+
+     label {
+         font-weight: bold;
+         display: block;
+     }
+
+     input,
+     textarea,
+     select {
+         width: 100%;
+         padding: 5px;
+     }
+
+     pre {
+         background: #f0f0f0;
+         padding: 10px;
+         overflow: auto;
+         height: 90vh;
+     }
+
+     .logs {
+         max-height: 200px;
+         overflow-y: auto;
+         background: #eef;
+         padding: 5px;
+         margin-top: 10px;
+         font-size: 12px;
+     }
+
+     img {
+         max-width: 100%;
+         margin-top: 5px;
+     }
+ </style>
+</head>
+<body>
+
+ <div id="app">
+     <div class="row">
+
+         <div class="col-sm-6">
+             <div class="form-group">
+                 <label>Nguồn truyện</label>
+                 <select v-model="selectedSource" class="form-control">
+                     <option v-for="item in sources" :value="item">[[ item.name ]]</option>
+                 </select>
+             </div>
+
+             <div> Last URL: [[lasturl]]</div>
+             <div class="form-group">
+                 <label>Link danh sách truyện</label>
+                 <input v-model="listpageUrl" type="text" class="form-control">
+                 <button @click="fetchAll">Lấy danh sách truyện</button>
+             </div>
+             <div class="form-group">
+                 <label>Link truyện</label>
+                 <input v-model="form.orgin_url" type="text" class="form-control">
+                 <button @click="fetchStoryInfo">Lấy thông tin truyện</button>
+             </div>
+
+             <div class="form-group">
+                 <label>Chương bắt đầu tải</label>
+                 <input v-model="form.start_url" type="text" class="form-control">
+             </div>
+
+             <div class="form-group">
+                 <label>Tên truyện</label>
+                 <input v-model="form.name" @input="generateSlug" class="form-control">
+             </div>
+
+             <div class="form-group">
+                 <label>Đường dẫn truyện</label>
+                 <input v-model="form.slug" class="form-control">
+             </div>
+
+             <div class="form-group">
+                 <label>Tác giả</label>
+                 <input v-model="form.author" type="text" class="form-control">
+             </div>
+             <div class="form-group">
+                 <label>Thể loại</label>
+                 <input v-model="form.categories" class="form-control"></input>
+             </div>
+
+             <div class="form-group">
+                 <label>Đánh giá</label>
+                 <input v-model="form.categories" class="form-control"></input>
+             </div>
+             <div class="form-group">
+                 <label>Số đánh giá</label>
+                 <input v-model="form.categories" class="form-control"></input>
+             </div>
+             <div class="form-group">
+                 <label>Mô tả</label>
+                 <textarea v-model="form.summary" class="form-control"></textarea>
+             </div>
+
+             <div class="form-group">
+                 <label>Mô tả dài</label>
+                 <textarea v-model="form.description" class="form-control"></textarea>
+             </div>
+
+             <div class="form-group">
+                 <label>Link ảnh</label>
+                 <div v-if="form.thumb">
+                     <img :src="form.thumb" style="max-width: 400px">
+                     <small>[[ form.thumb ]]</small>
+                 </div>
+             </div>
+
+             <div class="form-group">
+                 <button @click="crawlChapters" :disabled="isCrawling">Tải chương</button>
+                 <button @click="crawlChapters" :disabled="!currentUrl || isCrawling">▶️ Tiếp tục tải chương</button>
+                 <button @click="uploadBook" :disabled="loading">
+                     [[ loading ? 'Đang đăng...' : 'Đăng truyện' ]]
+                 </button>
+             </div>
+
+             <div class="logs">
+                 <div v-for="log in reversedTexts">[[ log ]]</div>
+             </div>
+         </div>
+
+         <div class="col-sm-6">
+             <h4>Listbook</h4>
+             <ol>
+                 <li v-for="(text, index) in listBooks" :key="index">
+                     [[text.url]] [[text.uploaded ? '✅' : '']]
+                 </li>
+             </ol>
+             <h4>Json Upload</h4>
+             <pre>[[ resultJson ]]</pre>
+         </div>
+     </div>
+
+ </div>
+
+ <script>
+     new Vue({
+         el: '#app',
+         delimiters: ['[[', ']]'],
+         data: {
+             listpageUrl: window.localStorage.getItem('last_url'),
+             options:[],
+             sources: [{
+                     type_code: 'monkeyd',
+                     name: 'monkeyd.net',
+                     content_class: '#chapter-content-render',
+                     next_button_class: 'a#next_chapter_btn',
+                     next_list_book_button_class: '.pagination .page-item:last-child .page-link',
+                     name_story_class: '.card-title',
+                     image_class: '.page-comics-detail .img-fluid',
+                     type_class: '.page-comics-detail .cate-item',
+                     review_average_class: '#averagerate',
+                     view_number_class: '.dt:contains("Lượt xem") + dd',
+                     total_review_class: '#countrate',
+                     author_class: '.dt:contains("Tác giả") + dd',
+                     listpage_book_class: '.position-relative a',
+                     description_class: '.story-description .ql-editor.inner ',
+                     first_chap: 'chuong-1.html',
+                     need_decript: true,
+                 },
+                 {
+                     type_code: 'laophatgia',
+                     name: 'laophatgia.net',
+                     content_class: '.text-left',
+                     next_button_class: '.next_page',
+                     next_list_book_button_class: '.nav-previous a',
+                     name_story_class: '.post-title h1',
+                     image_class: '.summary_image img',
+                     type_class: '.genres-content a',
+                     review_average_class: '#averagerate',
+                     view_number_class: '.summary-content:not(:has(*))',
+                     total_review_class: '#countrate',
+                     author_class: '.author-content a',
+                     listpage_book_class: '.item-small_thumbnail .page-item-detail .item-summary .post-title a',
+                     description_class: '.summary__content ',
+                     first_chap: 'chuong-1',
+                     need_decript: true,
+                 },
+                  {
+                     type_code: 'vivutruyen',
+                     name: 'vivutruyen2.net',
+                     content_class: '.reading',
+                     next_button_class: '#next_chap:not(.disabled)',
+                     next_list_book_button_class: '.nav-previous a',
+                     name_story_class: '.title-truyen',
+                     image_class: '.image-truyen img',
+                     type_class: '.genres-content a',
+                     review_average_class: '#averagerate',
+                     view_number_class: '.summary-content:not(:has(*))',
+                     total_review_class: '#countrate',
+                     author_class: '.info-truyen a',
+                     listpage_book_class: '.item-small_thumbnail .page-item-detail .item-summary .post-title a',
+                     description_class: '.noi-dung ',
+                     first_chap: 'chuong-1', 
+                     need_decript: true,
+                 }, 
+                 {
+                     type_code: 'truyenfull',
+                     name: 'truyenfull',
+                     content_class: '#chapter-c',
+                     next_button_class: '#next_chap',
+                     next_list_book_button_class: '.nav-previous',
+                     name_story_class: 'h3.title',
+                     image_class: '.info-holder .books .book img',
+                     author_class: '.info [itemprop="author"]',
+                     description_class: '.desc-text-full ',
+                     first_chap: 'chuong-1',
+                     need_decript: false,
+                 }
+             ],
+             selectedSource: {},
+             loading: false,
+             decodeMap: [],
+             countFail: 0,
+             form: {
+                 name: '',
+                 slug: '',
+                 categories: [],
+                 author: '',
+                 summary: '',
+                 description: '',
+                 rate: 0,
+                 rate_count: 0,
+                 views: 0,
+                 thumb: '',
+                 start_url: '',
+                 orgin_url: '',
+                 chapper: []
+             },
+             logs: [],
+             currentUrl: '',
+             currentIndex: 1,
+             isCrawling: false,
+             listBooks: [],
+             currentBookIdx: 0,
+             currentUrlPage: 0,
+         },
+         mounted() {
+             this.selectedSource = this.sources[0]
+         },
+         computed: {
+             resultJson() {
+                 return JSON.stringify({
+                     name: this.form.name,
+                     slug: this.form.slug,
+                     summary: this.form.summary,
+                     author: this.form.author,
+                     description: this.form.description,
+                     thumb: this.form.thumb,
+                     categories: this.form.categories,
+                     rate: this.form.rate,
+                     rate_count: this.form.rate_count,
+                     views: this.form.views,
+                     start_url: this.form.start_url,
+                     source_type: this.selectedSource?.type_code,
+                     orgin_url: this.form.orgin_url,
+                     chapper: this.form.chapper
+                 }, null, 2);
+             },
+             reversedTexts() {
+                 return this.logs.slice().reverse();
+             },
+             listBooksJS() {
+                 return JSON.stringify(this.listBooks)
+             },
+             lasturl() {
+                 return window.localStorage.getItem('last_url');
+             }
+         },
+         methods: {
+
+             async fetchAll() {
+                 if (!this.selectedSource || !this.listpageUrl) return alert("Điền link và chọn nguồn");
+                 let url = this.currentUrlPage || this.listpageUrl;
+
+                 this.listBooks = [];
+
+                 var count = 0;
+                 while (url) {
+                     const contentPage = await this.fetchDataFromURL(url)
+                     const doc = new DOMParser().parseFromString(contentPage, 'text/html');
+
+                     doc.querySelectorAll(this.selectedSource.listpage_book_class).forEach(a => {
+                         this.listBooks.push({
+                             url: a.href,
+                             uploaded: false
+                         })
+                     });
+                     const nextBtn = doc.querySelector(this.selectedSource.next_list_book_button_class);
+
+                     if (nextBtn && nextBtn.href) {
+                         url = nextBtn.href;
+                     } else {
+                         this.logs.push('✅ Đã lấy hết truyện');
+                         break;
+                     }
+                     if (count++ > 12) {
+                         localStorage.setItem('last_url', url);
+                         break;
+                     }
+
+
+                 }
+                 if (this.listBooks.length) {
+                     this.form.orgin_url = this.listBooks[0].url;
+                     this.listBooks[0].uploaded = true;
+                     this.fetchStoryInfo();
+                 }
+             },
+             cleanData() {
+                 this.form = {
+                     name: '',
+                     slug: '',
+                     categories: [],
+                     author: '',
+                     summary: '',
+                     description: '',
+                     rate: 0,
+                     rate_count: 0,
+                     views: 0,
+                     thumb: '',
+                     start_url: '',
+                     orgin_url: '',
+                     chapper: []
+                 };
+                 this.currentUrl = '';
+                 this.currentIndex = 1;
+                 this.currentBookIdx++;
+                 if (this.currentBookIdx < this.listBooks.length) {
+                     this.form.orgin_url = this.listBooks[this.currentBookIdx].url;
+                     this.listBooks[this.currentBookIdx].uploaded = true;
+                     this.fetchStoryInfo();
+                 }
+
+             },
+             async uploadBook() {
+
+                 this.loading = true;
+                 this.result = null;
+                 const payload = JSON.parse(this.resultJson)
+                 try {
+                     const res = await axios.post('admin/upload-book', payload); // Hàm tải truyện lên với data đây
+                     this.result = res.data.id;
+                     this.logs.push('✅ Đăng truyện thành công: ' + this.form.name);
+
+                 } catch (err) {
+                     this.logs.push('❌ Lỗi khi đăng truyện: ' + (err.response?.data?.message || err.message))
+                 } finally {
+                     this.loading = false;
+                     this.cleanData()
+                 }
+             },
+             generateSlug() {
+                 var str = this.form.name;
+                 str = str.toLowerCase();
+
+                 // Thay thế tiếng Việt có dấu thành không dấu
+                 str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+                 // Thay ký tự đặc biệt thành khoảng trắng
+                 str = str.replace(/[^a-z0-9\s-]/g, "");
+
+                 // Thay nhiều khoảng trắng hoặc dấu gạch ngang thành 1 gạch ngang
+                 str = str.replace(/[\s\-]+/g, "-");
+
+                 // Xoá dấu gạch ngang đầu/cuối
+                 str = str.replace(/^-+|-+$/g, "");
+
+                 this.form.slug = str
+             },
+
+             extractBeforeContentStyles(styleText) {
+                 const map = {};
+                 const regex = /(\.[\w-]+):before\s*{[^}]*content:\s*['"]([^'"]+)['"]/g;
+                 let match;
+                 while ((match = regex.exec(styleText)) !== null) {
+                     map[match[1]] = match[2];
+                 }
+                 return map;
+             },
+
+             async fetchDataFromURL(url) {
+                 const res = await axios.post('admin/getcontent', {
+                     url
+                 });
+				 // Ở đây mình cần 1 api để lấy html webtruyen. Nó chặn cors nên phải lấy qua backend 
+				 
+				 //code php mình dùng ntn
+				 
+    //public function getcontent(Request $request)
+    //{
+     //   $response = Http::get($request->input('url'));
+       // $html = $response->body();
+        //return response()->json([
+        //    'content' => $html
+        //], $response->status());
+   // }
+                 const data = res.data;
+                 return data.content;
+             },
+             async fetchStoryInfo() {
+                 this.countFail = 0;
+                 if (!this.selectedSource || !this.form.orgin_url) return alert("Điền link và chọn nguồn");
+                 const contentPage = await this.fetchDataFromURL(this.form.orgin_url)
+                 const doc = new DOMParser().parseFromString(contentPage, 'text/html');
+
+
+                 if (this.selectedSource.need_decript) {
+                     const styleText = [...doc.querySelectorAll('style')].map(s => s.innerHTML).join('\n');
+                     this.decodeMap = this.extractBeforeContentStyles(styleText);
+                 }
+
+                 const decodeEl = selector => {
+                     const el = doc.querySelector(selector);
+
+                     if (!el) return '';
+                     if (this.selectedSource.need_decript) {
+                         Object.keys(this.decodeMap).forEach(sel => {
+
+                             el.querySelectorAll(sel).forEach(span => {
+                                 span.innerHTML = this.decodeMap[sel] + span.innerHTML;
+                             });
+                         });
+                     }
+                     return el.innerHTML.replace(/[\n\t]/g, " ").trim();
+                 };
+                 const getImg = (selector) => {
+                     const el = doc.querySelector(selector);
+                     
+                     return el ? el.getAttribute('data-src') || el.src : '';
+                 };
+
+                 function parseViewsFromText(text) {
+                     // Find number + optional K/M that is followed by "views"
+                     const match = text.match(/([\d.]+)([KM]?)\s*views/i);
+                     if (match) {
+                         let number = parseFloat(match[1]);
+                         let suffix = match[2].toUpperCase();
+
+                         switch (suffix) {
+                             case 'K':
+                                 return number * 1000;
+                             case 'M':
+                                 return number * 1000000;
+                             default:
+                                 return number;
+                         }
+                     }
+                     return 0;
+                 }
+
+                 function getValueByLabel(label) {
+                     let dts = doc.querySelectorAll("dt");
+                     for (let dt of dts) {
+                         if (dt.textContent.trim() === label) {
+                             return dt.nextElementSibling?.textContent.trim();
+                         }
+                     }
+                     return null;
+                 }
+                 if (this.selectedSource.type_code == 'monkeyd') {
+                     this.form.start_url = doc.querySelector('.list-chapters .item:last-child  a').href
+
+                 }
+                else if (this.selectedSource.type_code == 'vivutruyen') {
+                    const chapters = doc.querySelectorAll('.chap-title');
+                    console.log(chapters);
+                        const lastChapter = chapters[chapters.length - 1];
+                      this.form.start_url = lastChapter.href;
+                 }
+                  else {
+                     this.form.start_url = `${this.form.orgin_url.replace('.html','')}${this.form.orgin_url.endsWith('/') ? '': '/'}${this.selectedSource.first_chap}`;
+                 }
+                 this.form.name = doc.querySelector(this.selectedSource.name_story_class).innerHTML.trim();
+                 this.generateSlug();
+                 console.log(getImg(this.selectedSource.image_class))
+                 this.form.thumb = getImg(this.selectedSource.image_class)
+                 this.form.summary = decodeEl(this.selectedSource.description_class);
+                 this.form.description = this.form.summary;
+                 let viewsNumber = 0
+                 if (this.selectedSource.type_code == 'monkeyd') {
+                     this.form.author = getValueByLabel('Tác giả');
+                     this.form.views = getValueByLabel('Lượt xem').replace(/\D/g, "");;
+                 } else {
+                     this.form.author = decodeEl(this.selectedSource.author_class);
+                     viewsNumber = doc.querySelector(this.selectedSource.view_number_class)?.innerHTML;
+                     if(viewsNumber){
+                            this.form.views = parseViewsFromText(viewsNumber);
+                     }
+                 
+
+                 }
+                 var self = this;
+                 self.form.categories = []
+                 doc.querySelectorAll(this.selectedSource.type_class).forEach(function(el) {
+
+                     self.form.categories.push(el.innerHTML)
+                 });
+                 this.form.rate = doc.querySelector(this.selectedSource.review_average_class) ? doc.querySelector(this.selectedSource.review_average_class).innerHTML.trim() : 0
+                 this.form.rate_count = doc.querySelector(this.selectedSource.total_review_class) ? doc.querySelector(this.selectedSource.total_review_class).innerHTML.trim() : 0
+
+                 this.crawlChapters();
+             },
+             async uploadImage(e) {
+                 const file = e.target.files[0];
+                 if (!file) return;
+                 const formData = new FormData();
+                 formData.append('file', file);
+
+                 // 👇 Replace this with your actual image upload logic (e.g. S3)
+                 const res = await fetch('https://api.imgbb.com/1/upload?key=YOUR_API_KEY', {
+                     method: 'POST',
+                     body: formData
+                 });
+                 const result = await res.json();
+                 this.form.thumb = result.data.url;
+             },
+             async crawlChapters() {
+                 if (!this.selectedSource || (!this.form.start_url && !this.currentUrl)) return alert("Thiếu thông tin crawl");
+
+                 this.isCrawling = true;
+                 this.logs.push(this.currentIndex === 1 ? '📖 Bắt đầu tải  chương...' : '🔄 Tiếp tục crawl chương...');
+
+                 let url = this.currentUrl || this.form.start_url;
+                 let index = this.currentIndex;
+
+                 while (url) {
+                     try {
+                         const contentPage = await this.fetchDataFromURL(url)
+
+                         const doc = new DOMParser().parseFromString(contentPage, 'text/html');
+                         if (this.selectedSource.need_decript) {
+                             const styleText = [...doc.querySelectorAll('style')].map(s => s.innerHTML).join('\n');
+                             this.decodeMap = this.extractBeforeContentStyles(styleText);
+                         }
+                         let contentEl = doc.querySelector(this.selectedSource.content_class);
+                         if (this.selectedSource.type_code == 'monkeyd') {
+                             if (doc.querySelector('.affActive')) {
+                                 console.log(doc.querySelector(this.selectedSource.content_class))
+                                 contentEl = doc.querySelector('.affActive');
+                                 let temp = document.createElement("div");
+                                 temp.innerHTML = contentEl.innerHTML;
+                                 contentEl = temp
+                             }
+                         }
+                         if (!contentEl) throw new Error('Không tìm thấy nội dung chương');
+
+                         contentEl.querySelectorAll("p.signature").forEach(el => el.remove());
+
+                         if (this.selectedSource.need_decript) {
+                             Object.keys(this.decodeMap).forEach(sel => {
+                                 const els = contentEl.querySelectorAll(sel);
+                                 els.forEach(el => {
+                                     el.innerHTML = this.decodeMap[sel] + el.innerHTML;
+                                 });
+                             });
+                         }
+                         let time = '';
+                         let name = ''
+                         if (this.selectedSource.type_code == 'monkeyd') {
+                             function utcToVNTime(utcString) {
+                                 // Tạo đối tượng Date từ chuỗi UTC
+                                 const vnTime = new Date(utcString + " UTC");
+ 
+
+                                 // Format ra chuỗi yyyy-mm-dd hh:mm:ss
+                                 const yyyy = vnTime.getFullYear();
+                                 const mm = String(vnTime.getMonth() + 1).padStart(2, "0");
+                                 const dd = String(vnTime.getDate()).padStart(2, "0");
+                                 const hh = String(vnTime.getHours()).padStart(2, "0");
+                                 const mi = String(vnTime.getMinutes()).padStart(2, "0");
+                                 const ss = String(vnTime.getSeconds()).padStart(2, "0");
+
+                                 return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+                             }
+                             time = doc.querySelector('.bg-light-info').innerHTML;
+                             time = time.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
+                             time = time[0]
+                             var updated_at = time ? utcToVNTime(time) : new Date().toISOString();
+                             name = doc.querySelector('.breadcrumb-item.active').innerHTML
+                         } else {
+                             time = doc.querySelector('meta[property="og:updated_time"]');
+                             var updated_at = time ? time.getAttribute('content') : new Date().toISOString();
+
+                         }
+
+                         let content = contentEl.innerHTML
+
+                         this.form.chapper.push({
+                             number: index,
+                             name: name || 'Chương ' + index,
+                             slug: 'chuong-' + index,
+                             updated_at,
+                             content
+                         });
+
+                         this.logs.push('✅ Chương ' + index + ' OK');
+
+                         const nextBtn = doc.querySelector(this.selectedSource.next_button_class);
+                         let lastChap = true;
+                         if (nextBtn) {
+                             if (this.selectedSource.type_code == 'monkeyd') {
+                                 let onclickAttr = nextBtn.getAttribute("onclick");
+                                 if (onclickAttr) {
+                                     let match = onclickAttr.match(/'([^']+)'/);
+                                     let text = match[1]
+                                     text = text.split(',');
+                                     url = `${this.form.orgin_url.replace('.html','')}${this.form.orgin_url.endsWith('/') ? '': '/'}${text[1]}.html`;
+                                     lastChap = false
+                                 }
+                             } else {
+                                 if (nextBtn.href) {
+                                     url = nextBtn.href;
+                                     lastChap = false
+                                 }
+                             }
+                         }
+                         if (lastChap) {
+                             this.logs.push('✅ Đã lấy hết chương. Tải truyên lên');
+                             this.currentUrl = '';
+                             this.currentIndex = 1;
+                             this.uploadBook();
+                             break;
+                         } else {
+                             index++;
+                             this.currentUrl = url;
+                             this.currentIndex = index;
+                         }
+                     } catch (e) {
+                         this.logs.push('❌ Lỗi chương ' + index + ': ' + e.message);
+                         this.currentUrl = url;
+                         this.currentIndex = index;
+                         this.countFail++;
+                         if (this.countFail > 2) {
+                             this.cleanData()
+                         }
+                         this.crawlChapters();
+                         break;
+                     }
+                 }
+
+                 this.isCrawling = false;
+             }
+         }
+     });
+ </script>
+ 
+</body>
+</html>
+
+ 
